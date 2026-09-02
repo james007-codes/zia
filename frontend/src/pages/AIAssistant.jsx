@@ -1,37 +1,25 @@
-import React, { useEffect, useState } from "react";
-import {
-  Send,
-  Plus,
-  MessageSquare,
-  Loader2,
-  Bot,
-} from "lucide-react";
-import ReactMarkdown from "react-markdown";
-
-import { COLORS } from "../styles/tokens.js";
-
+import { useEffect, useState } from "react";
 import {
   getConversations,
-  getConversationMessages,
   createConversation,
-} from "../services/conversationService.js";
+  getConversationMessages,
+  sendAIMessage,
+} from "../services/aiService.js";
+import { logout } from "../services/authService.js";
 
-import { sendAIMessage } from "../services/aiService.js";
-
-export function AIAssistant() {
+export default function AIAssistant({ user, onLogout }) {
   const [conversations, setConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] =
-    useState(null);
+  const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
 
-  const [message, setMessage] = useState("");
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingMessages, setLoadingMessages] =
-    useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [error, setError] = useState("");
 
-  // =========================
-  // LOAD CONVERSATIONS
-  // =========================
+  /* =========================
+     LOAD CONVERSATIONS
+  ========================= */
 
   useEffect(() => {
     loadConversations();
@@ -39,706 +27,381 @@ export function AIAssistant() {
 
   const loadConversations = async () => {
     try {
+      setError("");
+
       const data = await getConversations();
 
       setConversations(data || []);
 
       if (data && data.length > 0) {
-        await openConversation(data[0]);
+        await selectConversation(data[0]);
+      } else {
+        await handleNewConversation();
       }
-    } catch (error) {
-      console.error(
-        "Failed to load conversations:",
-        error
-      );
+    } catch (err) {
+      setError(err.message || "Failed to load conversations");
     }
   };
 
-  // =========================
-  // OPEN CONVERSATION
-  // =========================
+  /* =========================
+     SELECT CONVERSATION
+  ========================= */
 
-  const openConversation = async (conversation) => {
-    setSelectedConversation(conversation);
-    setLoadingMessages(true);
-
+  const selectConversation = async (conversation) => {
     try {
+      setCurrentConversation(conversation);
+      setLoadingMessages(true);
+      setError("");
+
       const data = await getConversationMessages(
-        conversation.id
+        conversation._id || conversation.id
       );
 
       setMessages(data || []);
-    } catch (error) {
-      console.error(
-        "Failed to load messages:",
-        error
-      );
-
-      setMessages([]);
+    } catch (err) {
+      setError(err.message || "Failed to load messages");
     } finally {
       setLoadingMessages(false);
     }
   };
 
-  // =========================
-  // NEW CHAT
-  // =========================
+  /* =========================
+     NEW CONVERSATION
+  ========================= */
 
-  const handleNewChat = async () => {
-    if (loading) return;
-
+  const handleNewConversation = async () => {
     try {
-      const conversation =
-        await createConversation();
+      setError("");
+
+      const conversation = await createConversation();
 
       setConversations((prev) => [
         conversation,
         ...prev,
       ]);
 
-      setSelectedConversation(conversation);
+      setCurrentConversation(conversation);
       setMessages([]);
-    } catch (error) {
-      console.error(
-        "Failed to create conversation:",
-        error
+    } catch (err) {
+      setError(
+        err.message || "Failed to create conversation"
       );
     }
   };
 
-  // =========================
-  // SEND MESSAGE
-  // =========================
+  /* =========================
+     SEND MESSAGE
+  ========================= */
 
-  const handleSend = async (e) => {
-    e?.preventDefault();
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
 
-    const trimmed = message.trim();
+    const trimmedMessage = input.trim();
 
-    if (
-      !trimmed ||
-      loading ||
-      !selectedConversation
-    ) {
+    if (!trimmedMessage || loading) {
       return;
     }
 
-    // Optimistic user message
-    const tempMessage = {
-      _id: `temp-${Date.now()}`,
+    if (!currentConversation) {
+      setError("No conversation selected");
+      return;
+    }
+
+    const conversationId =
+      currentConversation._id ||
+      currentConversation.id;
+
+    const userMessage = {
       role: "user",
-      content: trimmed,
-      createdAt: new Date().toISOString(),
+      content: trimmedMessage,
     };
 
     setMessages((prev) => [
       ...prev,
-      tempMessage,
+      userMessage,
     ]);
 
-    setMessage("");
+    setInput("");
     setLoading(true);
+    setError("");
 
     try {
       const response = await sendAIMessage(
-        trimmed,
-        selectedConversation.id
+        trimmedMessage,
+        conversationId
       );
 
-      // Assistant response
-      const assistantMessage = {
-        _id: `assistant-${Date.now()}`,
+      const aiMessage = {
         role: "assistant",
         content: response,
-        createdAt: new Date().toISOString(),
       };
 
       setMessages((prev) => [
         ...prev,
-        assistantMessage,
+        aiMessage,
       ]);
-
-      // Refresh conversation list
-      const updated =
-        await getConversations();
-
-      setConversations(updated || []);
-
-      const updatedConversation =
-        updated?.find(
-          (conversation) =>
-            conversation.id ===
-            selectedConversation.id
-        );
-
-      if (updatedConversation) {
-        setSelectedConversation(
-          updatedConversation
-        );
-      }
-    } catch (error) {
-      console.error(
-        "AI error:",
-        error
+    } catch (err) {
+      setError(
+        err.message || "Failed to get AI response"
       );
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          _id: `error-${Date.now()}`,
-          role: "assistant",
-          content:
-            "Sorry, I couldn't connect to the AI service. Please try again.",
-          createdAt:
-            new Date().toISOString(),
-        },
-      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================
-  // RENDER
-  // =========================
+  /* =========================
+     LOGOUT
+  ========================= */
+
+  const handleLogout = () => {
+    logout();
+    onLogout();
+  };
+
+  /* =========================
+     FORMAT MESSAGE
+  ========================= */
+
+  const getMessageText = (message) => {
+    return (
+      message.content ||
+      message.message ||
+      message.text ||
+      ""
+    );
+  };
+
+  /* =========================
+     UI
+  ========================= */
 
   return (
-    <div className="p-4 sm:p-6">
-      <section
-        className="rounded-2xl border overflow-hidden bg-white"
-        style={{
-          borderColor: COLORS.line,
-        }}
-      >
+    <div className="h-screen bg-slate-100 flex overflow-hidden">
 
-        {/* =========================
-            HEADER
-        ========================= */}
+      {/* =========================
+          SIDEBAR
+      ========================= */}
 
-        <div
-          className="flex items-center justify-between px-5 py-4 border-b"
-          style={{
-            borderColor: COLORS.line,
-          }}
-        >
+      <aside className="w-72 bg-slate-900 text-white flex flex-col">
 
-          <div className="flex items-center gap-3">
+        <div className="p-6 border-b border-slate-700">
+          <h1 className="text-2xl font-bold">
+            ZIA
+          </h1>
 
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{
-                backgroundColor:
-                  COLORS.tealSoft,
-              }}
-            >
-              <Bot
-                className="w-5 h-5"
-                style={{
-                  color: COLORS.teal,
-                }}
-              />
+          <p className="text-sm text-slate-400 mt-1">
+            AI Healthcare Assistant
+          </p>
+        </div>
+
+        <div className="p-4">
+          <button
+            onClick={handleNewConversation}
+            className="w-full bg-white text-slate-900 rounded-lg py-3 font-semibold hover:bg-slate-200 transition"
+          >
+            + New Conversation
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3">
+          <p className="text-xs uppercase tracking-wider text-slate-500 px-3 py-2">
+            Conversations
+          </p>
+
+          {conversations.length === 0 ? (
+            <p className="text-sm text-slate-500 px-3 py-4">
+              No conversations yet
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {conversations.map((conversation) => {
+                const id =
+                  conversation._id ||
+                  conversation.id;
+
+                const isActive =
+                  (currentConversation?._id ||
+                    currentConversation?.id) === id;
+
+                return (
+                  <button
+                    key={id}
+                    onClick={() =>
+                      selectConversation(conversation)
+                    }
+                    className={`w-full text-left px-3 py-3 rounded-lg text-sm transition ${
+                      isActive
+                        ? "bg-slate-700 text-white"
+                        : "text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    {conversation.title ||
+                      conversation.name ||
+                      "New Conversation"}
+                  </button>
+                );
+              })}
             </div>
+          )}
+        </div>
 
-            <div>
-              <h2
-                className="text-base font-semibold"
-                style={{
-                  color: COLORS.ink,
-                }}
-              >
-                CareFlow AI
-              </h2>
+        {/* USER / LOGOUT */}
 
-              <p
-                className="text-xs"
-                style={{
-                  color: COLORS.slate,
-                }}
-              >
-                AI Assistant
-              </p>
-            </div>
+        <div className="p-4 border-t border-slate-700">
+          <div className="mb-3">
+            <p className="text-sm font-semibold">
+              {user?.name ||
+                user?.email ||
+                "User"}
+            </p>
 
+            <p className="text-xs text-slate-400 capitalize">
+              {user?.role || "user"}
+            </p>
           </div>
 
           <button
-            onClick={handleNewChat}
-            disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            style={{
-              backgroundColor:
-                COLORS.teal,
-            }}
+            onClick={handleLogout}
+            className="w-full border border-slate-600 text-slate-300 rounded-lg py-2.5 text-sm hover:bg-slate-800 transition"
           >
-            <Plus className="w-4 h-4" />
-            New Chat
+            Logout
           </button>
-
         </div>
+      </aside>
 
-        {/* =========================
-            MAIN AREA
-        ========================= */}
+      {/* =========================
+          CHAT AREA
+      ========================= */}
 
-        <div className="grid lg:grid-cols-[240px_1fr] min-h-[600px]">
+      <main className="flex-1 flex flex-col min-w-0">
 
-          {/* =========================
-              CONVERSATIONS
-          ========================= */}
+        {/* HEADER */}
 
-          <aside
-            className="border-b lg:border-b-0 lg:border-r"
-            style={{
-              borderColor: COLORS.line,
-            }}
-          >
+        <header className="bg-white border-b border-slate-200 px-6 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {currentConversation?.title ||
+              "AI Assistant"}
+          </h2>
 
-            <div
-              className="px-4 py-3 text-xs font-semibold uppercase tracking-wide"
-              style={{
-                color: COLORS.slate,
-              }}
-            >
-              Conversations
-            </div>
+          <p className="text-sm text-slate-500">
+            Ask ZIA anything about your healthcare needs.
+          </p>
+        </header>
 
-            <div className="max-h-[500px] overflow-y-auto px-2 pb-3">
+        {/* ERROR */}
 
-              {conversations.length === 0 && (
-                <div
-                  className="px-3 py-6 text-center text-xs"
-                  style={{
-                    color: COLORS.slate,
-                  }}
-                >
-                  No conversations yet.
-                  <br />
-                  Click "New Chat" to start.
-                </div>
-              )}
-
-              {conversations.map(
-                (conversation) => {
-
-                  const active =
-                    selectedConversation?.id ===
-                    conversation.id;
-
-                  return (
-                    <button
-                      key={
-                        conversation.id
-                      }
-                      onClick={() =>
-                        openConversation(
-                          conversation
-                        )
-                      }
-                      disabled={
-                        loadingMessages
-                      }
-                      className="w-full flex items-start gap-3 px-3 py-3 rounded-xl text-left mb-1 transition hover:bg-slate-50"
-                      style={{
-                        backgroundColor:
-                          active
-                            ? COLORS.tealSoft
-                            : "transparent",
-
-                        color:
-                          active
-                            ? COLORS.teal
-                            : COLORS.ink,
-                      }}
-                    >
-
-                      <MessageSquare className="w-4 h-4 mt-0.5 shrink-0" />
-
-                      <div className="min-w-0">
-
-                        <div className="text-sm font-medium truncate">
-                          {conversation.title ||
-                            "New Conversation"}
-                        </div>
-
-                        <div
-                          className="text-xs mt-1"
-                          style={{
-                            color:
-                              COLORS.slate,
-                          }}
-                        >
-                          {conversation.updatedAt
-                            ? new Date(
-                                conversation.updatedAt
-                              ).toLocaleDateString()
-                            : ""}
-                        </div>
-
-                      </div>
-
-                    </button>
-                  );
-                }
-              )}
-
-            </div>
-
-          </aside>
-
-          {/* =========================
-              CHAT
-          ========================= */}
-
-          <div className="flex flex-col min-w-0">
-
-            {/* NO CONVERSATION */}
-
-            {!selectedConversation && (
-              <div className="flex-1 min-h-[500px] flex items-center justify-center px-6">
-
-                <div className="text-center">
-
-                  <div
-                    className="w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center"
-                    style={{
-                      backgroundColor:
-                        COLORS.tealSoft,
-                    }}
-                  >
-                    <Bot
-                      className="w-7 h-7"
-                      style={{
-                        color:
-                          COLORS.teal,
-                      }}
-                    />
-                  </div>
-
-                  <h3
-                    className="text-lg font-semibold"
-                    style={{
-                      color:
-                        COLORS.ink,
-                    }}
-                  >
-                    CareFlow AI
-                  </h3>
-
-                  <p
-                    className="mt-2 text-sm"
-                    style={{
-                      color:
-                        COLORS.slate,
-                    }}
-                  >
-                    Start a conversation with
-                    your AI assistant.
-                  </p>
-
-                  <button
-                    onClick={
-                      handleNewChat
-                    }
-                    className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-                    style={{
-                      backgroundColor:
-                        COLORS.teal,
-                    }}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Start New Chat
-                  </button>
-
-                </div>
-
-              </div>
-            )}
-
-            {/* SELECTED CONVERSATION */}
-
-            {selectedConversation && (
-              <>
-                {/* MESSAGES */}
-
-                <div className="flex-1 min-h-[420px] max-h-[550px] overflow-y-auto px-5 py-6">
-
-                  {loadingMessages && (
-                    <div className="flex justify-center py-10">
-                      <Loader2
-                        className="w-5 h-5 animate-spin"
-                        style={{
-                          color:
-                            COLORS.teal,
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {!loadingMessages &&
-                    messages.length === 0 && (
-                      <div className="h-full flex items-center justify-center">
-
-                        <div className="text-center">
-
-                          <Bot
-                            className="w-9 h-9 mx-auto mb-3"
-                            style={{
-                              color:
-                                COLORS.teal,
-                            }}
-                          />
-
-                          <h3
-                            className="font-semibold"
-                            style={{
-                              color:
-                                COLORS.ink,
-                            }}
-                          >
-                            How can I help?
-                          </h3>
-
-                          <p
-                            className="text-sm mt-1"
-                            style={{
-                              color:
-                                COLORS.slate,
-                            }}
-                          >
-                            Ask me about
-                            patients,
-                            hospital flow,
-                            policies, or
-                            anything else.
-                          </p>
-
-                        </div>
-
-                      </div>
-                    )}
-
-                  <div className="space-y-5">
-
-                    {messages.map((msg) => {
-
-                      const isUser =
-                        msg.role ===
-                        "user";
-
-                      return (
-                        <div
-                          key={msg._id}
-                          className={`flex ${
-                            isUser
-                              ? "justify-end"
-                              : "justify-start"
-                          }`}
-                        >
-
-                          <div
-                            className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-6"
-                            style={{
-                              backgroundColor:
-                                isUser
-                                  ? COLORS.teal
-                                  : COLORS.bg,
-
-                              color:
-                                isUser
-                                  ? "white"
-                                  : COLORS.ink,
-
-                              border:
-                                isUser
-                                  ? "none"
-                                  : `1px solid ${COLORS.line}`,
-                            }}
-                          >
-
-                            {isUser ? (
-                              <div className="whitespace-pre-wrap">
-                                {msg.content}
-                              </div>
-                            ) : (
-                              <ReactMarkdown
-                                components={{
-                                  p: ({
-                                    children,
-                                  }) => (
-                                    <p className="mb-2 last:mb-0">
-                                      {children}
-                                    </p>
-                                  ),
-
-                                  strong: ({
-                                    children,
-                                  }) => (
-                                    <strong className="font-semibold">
-                                      {children}
-                                    </strong>
-                                  ),
-
-                                  ul: ({
-                                    children,
-                                  }) => (
-                                    <ul className="list-disc pl-5 mb-2 space-y-1">
-                                      {children}
-                                    </ul>
-                                  ),
-
-                                  ol: ({
-                                    children,
-                                  }) => (
-                                    <ol className="list-decimal pl-5 mb-2 space-y-1">
-                                      {children}
-                                    </ol>
-                                  ),
-
-                                  li: ({
-                                    children,
-                                  }) => (
-                                    <li>
-                                      {children}
-                                    </li>
-                                  ),
-
-                                  h1: ({
-                                    children,
-                                  }) => (
-                                    <h1 className="text-lg font-semibold mb-2">
-                                      {children}
-                                    </h1>
-                                  ),
-
-                                  h2: ({
-                                    children,
-                                  }) => (
-                                    <h2 className="text-base font-semibold mb-2">
-                                      {children}
-                                    </h2>
-                                  ),
-
-                                  h3: ({
-                                    children,
-                                  }) => (
-                                    <h3 className="font-semibold mb-1">
-                                      {children}
-                                    </h3>
-                                  ),
-                                }}
-                              >
-                                {msg.content}
-                              </ReactMarkdown>
-                            )}
-
-                          </div>
-
-                        </div>
-                      );
-                    })}
-
-                    {/* AI LOADING */}
-
-                    {loading && (
-                      <div className="flex justify-start">
-
-                        <div
-                          className="rounded-2xl px-4 py-3 border"
-                          style={{
-                            borderColor:
-                              COLORS.line,
-                            backgroundColor:
-                              COLORS.bg,
-                          }}
-                        >
-                          <Loader2
-                            className="w-4 h-4 animate-spin"
-                            style={{
-                              color:
-                                COLORS.teal,
-                            }}
-                          />
-                        </div>
-
-                      </div>
-                    )}
-
-                  </div>
-
-                </div>
-
-                {/* =========================
-                    INPUT
-                ========================= */}
-
-                <div
-                  className="border-t p-4"
-                  style={{
-                    borderColor:
-                      COLORS.line,
-                  }}
-                >
-
-                  <form
-                    onSubmit={
-                      handleSend
-                    }
-                    className="flex gap-3"
-                  >
-
-                    <input
-                      value={message}
-                      onChange={(e) =>
-                        setMessage(
-                          e.target.value
-                        )
-                      }
-                      disabled={loading}
-                      placeholder="Ask CareFlow AI..."
-                      className="flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2"
-                      style={{
-                        borderColor:
-                          COLORS.line,
-
-                        "--tw-ring-color":
-                          COLORS.teal,
-                      }}
-                    />
-
-                    <button
-                      type="submit"
-                      disabled={
-                        loading ||
-                        !message.trim()
-                      }
-                      className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center text-white disabled:opacity-50"
-                      style={{
-                        backgroundColor:
-                          COLORS.teal,
-                      }}
-                    >
-
-                      {loading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
-
-                    </button>
-
-                  </form>
-
-                </div>
-              </>
-            )}
-
+        {error && (
+          <div className="mx-6 mt-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+            {error}
           </div>
+        )}
 
+        {/* MESSAGES */}
+
+        <div className="flex-1 overflow-y-auto p-6">
+
+          {loadingMessages ? (
+            <div className="h-full flex items-center justify-center">
+              <p className="text-slate-400">
+                Loading conversation...
+              </p>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center">
+
+              <div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center text-2xl font-bold mb-5">
+                Z
+              </div>
+
+              <h3 className="text-2xl font-bold text-slate-900">
+                How can I help you?
+              </h3>
+
+              <p className="text-slate-500 mt-2 max-w-md">
+                Ask me a healthcare-related question and
+                I'll do my best to assist you.
+              </p>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto space-y-5">
+
+              {messages.map((message, index) => {
+                const isUser =
+                  message.role === "user";
+
+                return (
+                  <div
+                    key={message._id || index}
+                    className={`flex ${
+                      isUser
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-5 py-3 ${
+                        isUser
+                          ? "bg-slate-900 text-white"
+                          : "bg-white border border-slate-200 text-slate-800"
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap leading-6">
+                        {getMessageText(message)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
         </div>
 
-      </section>
+        {/* INPUT */}
+
+        <div className="bg-white border-t border-slate-200 p-4">
+          <form
+            onSubmit={handleSendMessage}
+            className="max-w-4xl mx-auto flex gap-3"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) =>
+                setInput(e.target.value)
+              }
+              placeholder="Ask ZIA something..."
+              disabled={loading}
+              className="flex-1 px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-100"
+            />
+
+            <button
+              type="submit"
+              disabled={
+                loading ||
+                !input.trim() ||
+                !currentConversation
+              }
+              className="px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 transition"
+            >
+              {loading ? "..." : "Send"}
+            </button>
+          </form>
+        </div>
+
+      </main>
     </div>
   );
 }
-
-export default AIAssistant;

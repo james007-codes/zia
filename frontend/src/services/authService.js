@@ -1,188 +1,187 @@
 const API_BASE_URL = "http://localhost:5000/api";
 
 /* =========================
-   USER AUTHENTICATION
+   USER LOGIN
 ========================= */
 
 export const loginUser = async (email, password) => {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            email,
-            password,
-        }),
-    });
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+    }),
+  });
 
-    const data = await response.json();
+  const data = await response.json();
 
-    if (!response.ok) {
-        throw new Error(data.message || "Login failed");
-    }
+  if (!response.ok) {
+    throw new Error(data.message || "Login failed");
+  }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("role", "user");
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+  localStorage.setItem("role", "user");
 
-    return data;
+  return data;
 };
 
-
 /* =========================
-   ADMIN AUTHENTICATION
+   ADMIN LOGIN
 ========================= */
 
 export const loginAdmin = async (email, password) => {
-    const response = await fetch(`${API_BASE_URL}/auth/admin/login`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            email,
-            password,
-        }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.message || "Admin login failed");
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/login`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
     }
+  );
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.admin));
-    localStorage.setItem("role", "admin");
+  const data = await response.json();
 
-    return data;
+  if (!response.ok) {
+    throw new Error(
+      data.message || "Admin login failed"
+    );
+  }
+
+  localStorage.setItem("token", data.token);
+  localStorage.setItem(
+    "user",
+    JSON.stringify(data.admin)
+  );
+  localStorage.setItem("role", "admin");
+
+  return data;
 };
 
+/* =========================
+   USER REGISTER
+========================= */
+
+export const registerUser = async (
+  name,
+  email,
+  password
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/register`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || "Registration failed"
+    );
+  }
+
+  localStorage.setItem("token", data.token);
+  localStorage.setItem(
+    "user",
+    JSON.stringify(data.user)
+  );
+  localStorage.setItem("role", "user");
+
+  return data;
+};
+
+/* =========================
+   ADMIN REGISTER
+========================= */
+
+export const registerAdmin = async (
+  name,
+  email,
+  password
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/register`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.message || "Admin registration failed"
+    );
+  }
+
+  localStorage.setItem("token", data.token);
+  localStorage.setItem(
+    "user",
+    JSON.stringify(data.admin)
+  );
+  localStorage.setItem("role", "admin");
+
+  return data;
+};
 
 /* =========================
    LOGOUT
 ========================= */
 
 export const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("role");
 };
 
-
 /* =========================
-   LOCAL STORAGE HELPERS
+   GET TOKEN
 ========================= */
 
 export const getToken = () => {
-    return localStorage.getItem("token");
+  return localStorage.getItem("token");
 };
+
+/* =========================
+   GET STORED USER
+========================= */
 
 export const getStoredUser = () => {
-    const user = localStorage.getItem("user");
+  const user = localStorage.getItem("user");
 
-    return user ? JSON.parse(user) : null;
+  return user ? JSON.parse(user) : null;
 };
+
+/* =========================
+   GET ROLE
+========================= */
 
 export const getRole = () => {
-    return localStorage.getItem("role");
+  return localStorage.getItem("role");
 };
-
-
-/* =========================
-   CURRENT USER
-========================= */
-
-export const getCurrentUser = async () => {
-    const token = getToken();
-    const role = getRole();
-
-    if (!token || !role) {
-        return null;
-    }
-
-    const endpoint =
-        role === "admin"
-            ? `${API_BASE_URL}/admin/profile`
-            : `${API_BASE_URL}/users/profile`;
-
-    const response = await fetch(endpoint, {
-        method: "GET",
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
-    });
-
-    if (!response.ok) {
-        logout();
-        return null;
-    }
-
-    const data = await response.json();
-
-    return data;
-};
-
-
-/* =========================
-   REGISTER USER
-========================= */
-
-export const registerUser = async (name, email, password) => {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            name,
-            email,
-            password,
-        }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.message || "Registration failed");
-    }
-
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("role", "user");
-
-    return data;
-};
-
-
-/* =========================
-   REGISTER ADMIN
-========================= */
-
-export const registerAdmin = async (name, email, password) => {
-    const response = await fetch(`${API_BASE_URL}/auth/admin/register`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            name,
-            email,
-            password,
-        }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(data.message || "Admin registration failed");
-    }
-
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.admin));
-    localStorage.setItem("role", "admin");
-
-    return data;
-};
-

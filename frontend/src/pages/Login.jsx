@@ -1,405 +1,193 @@
-import React, { useState } from "react";
-import { Eye, EyeOff, Loader2, XCircle } from "lucide-react";
+import { useState } from "react";
+import {
+  loginUser,
+  loginAdmin,
+} from "../services/authService.js";
 
-import { COLORS } from "../styles/tokens.js";
-import { Card } from "../components/shared/Card.jsx";
-import { Logo, Vitals } from "../components/shared/Brand.jsx";
+export default function Login({ onLogin, onRegister }) {
+  const [role, setRole] = useState("user");
 
-import { loginUser, loginAdmin } from "../services/authService.js";
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-export function Login({ onLogin, onRegister }) {
-    // "admin" or "user"
-const [role, setRole] = useState("admin");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-
-    const [remember, setRemember] = useState(true);
-    const [showPw, setShowPw] = useState(false);
-
-    const [errors, setErrors] = useState({});
-    const [loading, setLoading] = useState(false);
-    const [authError, setAuthError] = useState("");
-
-    const validate = () => {
-        const errs = {};
-
-if (!email.trim()) {
-    errs.email = "Email is required.";
-} else if (!/^\S+@\S+\.\S+$/.test(email)) {
-    errs.email = "Enter a valid email address.";
-}
-
-        if (!password) {
-            errs.password = "Password is required.";
-        } else if (password.length < 6) {
-            errs.password = "Password must be at least 6 characters.";
-        }
-
-        setErrors(errs);
-
-        return Object.keys(errs).length === 0;
-    };
-
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    setAuthError("");
-
-    if (!validate()) {
-        return;
-    }
-
+    setError("");
     setLoading(true);
 
     try {
-        let data;
+      const data =
+        role === "admin"
+          ? await loginAdmin(email, password)
+          : await loginUser(email, password);
 
-        if (role === "admin") {
-            // Staff/Admin login
-            data = await loginAdmin(email, password);
+      const loggedInUser =
+        role === "admin"
+          ? {
+              ...data.admin,
+              role: "admin",
+            }
+          : {
+              ...data.user,
+              role: "user",
+            };
 
-            console.log("Admin login successful:", data);
-
-            onLogin({
-                ...data.admin,
-                role: "admin",
-            });
-        } else {
-            // Patient login
-            data = await loginUser(email, password);
-
-            console.log("Patient login successful:", data);
-
-            onLogin({
-                ...data.user,
-                role: "user",
-            });
-        }
-    } catch (error) {
-        console.error("Login error:", error);
-
-        setAuthError(
-            error.message ||
-            "Incorrect email or password. Please try again."
-        );
+      onLogin(loggedInUser);
+    } catch (err) {
+      setError(err.message || "Login failed");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
-    const handleRoleChange = (newRole) => {
-        setRole(newRole);
-        setAuthError("");
-        setErrors({});
-    };
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
 
-    return (
-        <div
-            className="min-h-screen w-full flex items-center justify-center px-4"
-            style={{ backgroundColor: COLORS.bg }}
-        >
-            <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-slate-900">
+            ZIA
+          </h1>
 
-                {/* Logo */}
-                <div className="flex flex-col items-center mb-8">
-                    <Logo size="lg" />
-
-                    <div className="mt-4">
-                        <Vitals w={140} h={24} />
-                    </div>
-                </div>
-
-                <Card className="p-7 sm:p-8">
-
-                    {/* Role Selector */}
-                    <div
-                        className="flex mb-6 rounded-xl p-1"
-                        style={{ backgroundColor: COLORS.bg }}
-                    >
-                        <button
-                            type="button"
-                            onClick={() => handleRoleChange("admin")}
-                            className="flex-1 rounded-lg py-2 text-sm font-medium transition"
-                            style={{
-                                backgroundColor:
-                                    role === "admin"
-                                        ? COLORS.teal
-                                        : "transparent",
-
-                                color:
-                                    role === "admin"
-                                        ? "white"
-                                        : COLORS.slate,
-                            }}
-                        >
-                            Staff / Admin
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => handleRoleChange("user")}
-                            className="flex-1 rounded-lg py-2 text-sm font-medium transition"
-                            style={{
-                                backgroundColor:
-                                    role === "user"
-                                        ? COLORS.teal
-                                        : "transparent",
-
-                                color:
-                                    role === "user"
-                                        ? "white"
-                                        : COLORS.slate,
-                            }}
-                        >
-                            Patient
-                        </button>
-                    </div>
-
-                    {/* Heading */}
-                    <h1
-                        className="text-xl font-semibold mb-1"
-                        style={{ color: COLORS.ink }}
-                    >
-                        {role === "admin"
-                            ? "Staff / Admin sign in"
-                            : "Patient sign in"}
-                    </h1>
-
-                    <p
-                        className="text-sm mb-6"
-                        style={{ color: COLORS.slate }}
-                    >
-                        {role === "admin"
-                            ? "Sign in to manage today's queue and hospital resources."
-                            : "Sign in to access your CareFlow patient account."}
-                    </p>
-
-                    {/* Authentication Error */}
-                    {authError && (
-                        <div
-                            role="alert"
-                            className="mb-5 flex items-start gap-2 rounded-xl px-3.5 py-3 text-sm"
-                            style={{
-                                backgroundColor: COLORS.criticalSoft,
-                                color: COLORS.critical,
-                            }}
-                        >
-                            <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
-
-                            <span>{authError}</span>
-                        </div>
-                    )}
-
-                    {/* Login Form */}
-                    <form onSubmit={handleSubmit} noValidate>
-
-                        {/* Email */}
-                        <div className="mb-4">
-                            <label
-                                htmlFor="email"
-                                className="block text-sm font-medium mb-1.5"
-                                style={{ color: COLORS.ink }}
-                            >
-                                Email
-                            </label>
-
-                            <input
-                                id="email"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                aria-invalid={!!errors.email}
-                                aria-describedby={
-                                    errors.email
-                                        ? "email-error"
-                                        : undefined
-                                }
-                                placeholder={
-                                    role === "admin"
-                                        ? "staff@hospital.org"
-                                        : "patient@email.com"
-                                }
-                                className="w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none focus:ring-2 transition"
-                                style={{
-                                    borderColor: errors.email
-                                        ? COLORS.critical
-                                        : COLORS.line,
-
-                                    "--tw-ring-color": COLORS.teal,
-                                }}
-                            />
-
-                            {errors.email && (
-                                <p
-                                    id="email-error"
-                                    className="mt-1.5 text-xs"
-                                    style={{
-                                        color: COLORS.critical,
-                                    }}
-                                >
-                                    {errors.email}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Password */}
-                        <div className="mb-4">
-                            <label
-                                htmlFor="password"
-                                className="block text-sm font-medium mb-1.5"
-                                style={{ color: COLORS.ink }}
-                            >
-                                Password
-                            </label>
-
-                            <div className="relative">
-
-                                <input
-                                    id="password"
-                                    type={showPw ? "text" : "password"}
-                                    value={password}
-                                    onChange={(e) =>
-                                        setPassword(e.target.value)
-                                    }
-                                    aria-invalid={!!errors.password}
-                                    aria-describedby={
-                                        errors.password
-                                            ? "password-error"
-                                            : undefined
-                                    }
-                                    placeholder="••••••••"
-                                    className="w-full rounded-xl border px-3.5 py-2.5 pr-10 text-sm outline-none focus:ring-2 transition"
-                                    style={{
-                                        borderColor: errors.password
-                                            ? COLORS.critical
-                                            : COLORS.line,
-
-                                        "--tw-ring-color": COLORS.teal,
-                                    }}
-                                />
-
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setShowPw((v) => !v)
-                                    }
-                                    aria-label={
-                                        showPw
-                                            ? "Hide password"
-                                            : "Show password"
-                                    }
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                >
-                                    {showPw ? (
-                                        <EyeOff className="w-4 h-4" />
-                                    ) : (
-                                        <Eye className="w-4 h-4" />
-                                    )}
-                                </button>
-
-                            </div>
-
-                            {errors.password && (
-                                <p
-                                    id="password-error"
-                                    className="mt-1.5 text-xs"
-                                    style={{
-                                        color: COLORS.critical,
-                                    }}
-                                >
-                                    {errors.password}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Remember / Forgot Password */}
-                        <div className="flex items-center justify-between mb-6">
-
-                            <label
-                                className="flex items-center gap-2 text-sm select-none"
-                                style={{ color: COLORS.slate }}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={remember}
-                                    onChange={(e) =>
-                                        setRemember(e.target.checked)
-                                    }
-                                    className="rounded"
-                                    style={{
-                                        accentColor: COLORS.teal,
-                                    }}
-                                />
-
-                                Remember me
-                            </label>
-
-                            <button
-                                type="button"
-                                className="text-sm font-medium hover:underline"
-                                style={{ color: COLORS.teal }}
-                            >
-                                Forgot password?
-                            </button>
-
-                        </div>
-
-                        {/* Submit */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition disabled:opacity-70"
-                            style={{
-                                backgroundColor: COLORS.teal,
-                            }}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Signing in…
-                                </>
-                            ) : (
-                                "Sign in"
-                            )}
-                        </button>
-
-                    </form>
-
-                    {/* Account Information */}
-<div className="mt-5 text-center">
-    <p
-        className="text-xs"
-        style={{ color: COLORS.slate }}
-    >
-        Don't have a CareFlow account?
-    </p>
-
-    <button
-        type="button"
-        onClick={() => onRegister(role)}
-        className="mt-1 text-sm font-semibold hover:underline"
-        style={{ color: COLORS.teal }}
-    >
-        Register now
-    </button>
-</div>
-
-                </Card>
-
-                {/* Disclaimer */}
-                <p
-                    className="text-xs text-center mt-6"
-                    style={{ color: COLORS.slate }}
-                >
-                    CareFlow provides operational estimates and queue-management
-                    recommendations. It does not diagnose patients or replace
-                    clinical judgment.
-                </p>
-
-            </div>
+          <p className="text-slate-500 mt-2">
+            AI-powered healthcare assistant
+          </p>
         </div>
-    );
-}
 
-export default Login;
+        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+            Welcome back
+          </h2>
+
+          <p className="text-sm text-slate-500 mb-6">
+            Login to continue to ZIA
+          </p>
+
+          {/* ROLE */}
+
+          <div className="grid grid-cols-2 gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
+
+            <button
+              type="button"
+              onClick={() => setRole("user")}
+              className={`py-2.5 rounded-md text-sm font-semibold transition ${
+                role === "user"
+                  ? "bg-white shadow text-slate-900"
+                  : "text-slate-500"
+              }`}
+            >
+              User
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRole("admin")}
+              className={`py-2.5 rounded-md text-sm font-semibold transition ${
+                role === "admin"
+                  ? "bg-white shadow text-slate-900"
+                  : "text-slate-500"
+              }`}
+            >
+              Admin
+            </button>
+
+          </div>
+
+          {/* ERROR */}
+
+          {error && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* FORM */}
+
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5"
+          >
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Email
+              </label>
+
+              <input
+                type="email"
+                value={email}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                placeholder="Enter your email"
+                required
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Password
+              </label>
+
+              <input
+                type="password"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                placeholder="Enter your password"
+                required
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-50 transition"
+            >
+              {loading
+                ? "Logging in..."
+                : `Login as ${
+                    role === "admin"
+                      ? "Admin"
+                      : "User"
+                  }`}
+            </button>
+
+          </form>
+
+          {/* REGISTER */}
+
+          <div className="text-center mt-6 pt-5 border-t border-slate-200">
+
+            <p className="text-sm text-slate-500">
+              Don't have an account?
+            </p>
+
+            <button
+              type="button"
+              onClick={onRegister}
+              className="mt-2 text-sm font-semibold text-slate-900 hover:underline"
+            >
+              Create an account
+            </button>
+
+          </div>
+
+        </div>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          ZIA — Zero Interface AI
+        </p>
+
+      </div>
+    </div>
+  );
+}
