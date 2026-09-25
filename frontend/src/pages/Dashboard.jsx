@@ -177,7 +177,20 @@ export default function Dashboard({ user, onLogout }) {
     lastCardId: null,
   });
 
-  useEffect(() => {\n    const saved = loadRuntimeSnapshot();\n    if (!saved) return;\n    runtimeRef.current = {\n      ...runtimeRef.current,\n      ...saved,\n      previousSample: null,\n      samples: saved.samples || [],\n      transitions: saved.transitions || [],\n      lastAnimatedProductId: null,\n    };\n  }, []);\n\n  const [gazeRuntime, setGazeRuntime] = useState({
+  useEffect(() => {
+    const saved = loadRuntimeSnapshot();
+    if (!saved) return;
+    runtimeRef.current = {
+      ...runtimeRef.current,
+      ...saved,
+      previousSample: null,
+      samples: saved.samples || [],
+      transitions: saved.transitions || [],
+      lastAnimatedProductId: null,
+    };
+  }, []);
+
+  const [gazeRuntime, setGazeRuntime] = useState({
     calibrated: false,
     state: "IDLE",
     focusedProductId: null,
