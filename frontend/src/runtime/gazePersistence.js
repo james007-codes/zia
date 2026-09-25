@@ -9,7 +9,8 @@ export function createRuntimeSnapshot(runtime) {
     cardDwellMs: runtime.cardDwellMs,
     velocity: runtime.velocity,
     switchCount: runtime.switchCount,
-    outsideMs: runtime.outsideMs,\n    transitions: runtime.transitions.map((transition) => ({ ...transition })),
+    outsideMs: runtime.outsideMs,
+    transitions: runtime.transitions.map((transition) => ({ ...transition })),
     samples: runtime.samples.map((sample) => ({
       x: sample.x,
       y: sample.y,
