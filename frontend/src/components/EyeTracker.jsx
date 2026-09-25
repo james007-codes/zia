@@ -111,10 +111,19 @@ export default function EyeTracker({ visible = true }) {
           .setGazeListener((data) => {
             if (!data) return;
 
-            setGazeCoords({
+            const sample = {
               x: Math.round(data.x),
               y: Math.round(data.y),
-            });
+              timestamp: Date.now(),
+            };
+
+            setGazeCoords(sample);
+
+            window.dispatchEvent(
+              new CustomEvent("zia:gaze-sample", {
+                detail: sample,
+              })
+            );
           })
           .begin()
           .then(() => {
@@ -189,8 +198,13 @@ export default function EyeTracker({ visible = true }) {
 
     if (allDone) {
       setCalibrated(true);
+      window.dispatchEvent(
+        new CustomEvent("zia:gaze-calibrated")
+      );
     }
   };
+
+  if (!visible) return null;
 
   // =========================
   // ERROR
