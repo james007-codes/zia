@@ -326,6 +326,33 @@ export default function Dashboard({ user, onLogout }) {
     };
   }, []);
 
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const runtime = runtimeRef.current;
+
+      if (!runtime.calibrated || !runtime.previousSample) return;
+
+      const now = Date.now();
+      const noSampleMs = now - runtime.previousSample.timestamp;
+
+      if (
+        noSampleMs < GAZE_THRESHOLDS.abandonNoSampleMs ||
+        runtime.state === "ABANDON"
+      ) {
+        return;
+      }
+
+      runtime.state = "ABANDON";
+      setGazeRuntime((current) => ({
+        ...current,
+        state: "ABANDON",
+      }));
+    }, 250);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const focusedId = gazeRuntime.focusedProductId;
     const card = focusedId
@@ -1072,6 +1099,7 @@ export default function Dashboard({ user, onLogout }) {
                         <div className="relative mb-4 aspect-square overflow-hidden rounded-xl bg-slate-100">
 
                           <img
+                            data-card-image
                             src={product.image}
                             alt={product.name}
                             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
@@ -1088,13 +1116,17 @@ export default function Dashboard({ user, onLogout }) {
                             {product.badge}
                           </span>
 
-                          <button\n                            data-quick-add\n                            className="absolute bottom-3 left-3 right-3 translate-y-3 rounded-full bg-slate-950 py-2.5 text-xs font-semibold text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                          <button
+                            data-quick-add
+                            className="absolute bottom-3 left-3 right-3 translate-y-3 rounded-full bg-slate-950 py-2.5 text-xs font-semibold text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                             Quick Add
                           </button>
 
                         </div>
 
-                        <div\n                          data-card-body\n                          className="flex flex-1 flex-col justify-between px-1">
+                        <div
+                          data-card-body
+                          className="flex flex-1 flex-col justify-between px-1">
 
                           <div>
 
