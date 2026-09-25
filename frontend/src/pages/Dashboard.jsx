@@ -188,6 +188,17 @@ export default function Dashboard({ user, onLogout }) {
       transitions: saved.transitions || [],
       lastAnimatedProductId: null,
     };
+
+    setGazeRuntime((current) => ({
+      ...current,
+      calibrated: Boolean(saved.calibrated),
+      state: saved.state || "IDLE",
+      focusedProductId: saved.focusedProductId ?? null,
+      cardDwellMs: saved.cardDwellMs || 0,
+      velocity: saved.velocity || 0,
+      switchCount: saved.switchCount || 0,
+      outsideMs: saved.outsideMs || 0,
+    }));
   }, []);
 
   const [gazeRuntime, setGazeRuntime] = useState({
@@ -199,6 +210,13 @@ export default function Dashboard({ user, onLogout }) {
     switchCount: 0,
     outsideMs: 0,
   });
+
+  const handleExportRuntime = () => {
+    exportRuntimeJson({
+      ...runtimeRef.current,
+      ...gazeRuntime,
+    });
+  };
 
   useEffect(() => {
     const handleCalibration = () => {
@@ -236,6 +254,7 @@ export default function Dashboard({ user, onLogout }) {
         {
           ...sample,
           velocity,
+          productId: focusedProductId,
         },
       ];
 
@@ -316,8 +335,27 @@ export default function Dashboard({ user, onLogout }) {
         nextState = "FOCUS";
       }
 
+      const previousState = runtime.state;
+
       runtime.focusedProductId = focusedProductId;
+      runtime.cardDwellMs = cardDwellMs;
+      runtime.velocity = velocity;
+      runtime.switchCount = runtime.switchTimestamps.length;
+      runtime.outsideMs = outsideMs;
       runtime.state = nextState;
+
+      if (nextState !== previousState) {
+        runtime.transitions.push({
+          from: previousState,
+          to: nextState,
+          timestamp: now,
+          focusedProductId,
+        });
+
+        if (runtime.transitions.length > 200) {
+          runtime.transitions.shift();
+        }
+      }
 
       setGazeRuntime({
         calibrated: runtime.calibrated,
@@ -356,6 +394,18 @@ export default function Dashboard({ user, onLogout }) {
     const interval = window.setInterval(() => {
       const runtime = runtimeRef.current;
 
+      if (!runtime.calibrated) return;
+
+      saveRuntimeSnapshot(runtime);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const runtime = runtimeRef.current;
+
       if (!runtime.calibrated || !runtime.previousSample) return;
 
       const now = Date.now();
@@ -368,11 +418,28 @@ export default function Dashboard({ user, onLogout }) {
         return;
       }
 
+      const previousState = runtime.state;
       runtime.state = "ABANDON";
+
+      if (previousState !== "ABANDON") {
+        runtime.transitions.push({
+          from: previousState,
+          to: "ABANDON",
+          timestamp: now,
+          focusedProductId: runtime.focusedProductId,
+        });
+
+        if (runtime.transitions.length > 200) {
+          runtime.transitions.shift();
+        }
+      }
+
       setGazeRuntime((current) => ({
         ...current,
         state: "ABANDON",
       }));
+
+      saveRuntimeSnapshot(runtime);
     }, 250);
 
     return () => window.clearInterval(interval);
@@ -674,6 +741,13 @@ export default function Dashboard({ user, onLogout }) {
 
       </nav>
 
+      <EyeTracker visible={activeView === "eye"} />
+
+      <GazeRuntimeDebugger
+        runtime={gazeRuntime}
+        onExport={handleExportRuntime}
+      />
+
       {/* =====================================
           EYE TRACKER VIEW
       ===================================== */}
@@ -705,9 +779,9 @@ export default function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-            <div className="sr-only"><span /></div>
-
+            <p className="text-sm text-slate-500">
+              Complete the calibration points above, then return to the marketplace to see gaze-driven runtime behavior.
+            </p>
           </div>
 
         </main>
