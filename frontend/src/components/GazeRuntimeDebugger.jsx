@@ -5,7 +5,7 @@ const STATE_STYLES = {
   IDLE: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
-export default function GazeRuntimeDebugger({ runtime }) {
+export default function GazeRuntimeDebugger({ runtime, onExport }) {
   if (!import.meta.env.DEV) return null;
 
   const stateClass =
@@ -68,6 +68,14 @@ export default function GazeRuntimeDebugger({ runtime }) {
           </p>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={onExport}
+        className="mt-3 w-full rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+      >
+        Export Runtime JSON
+      </button>
 
       <p className="mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-400">
         Focus = sustained card dwell. Struggle = rapid gaze
