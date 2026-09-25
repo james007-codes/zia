@@ -12,7 +12,15 @@ import {
   LogOut,
 } from "lucide-react";
 
-import { gsap } from "gsap";\n\nimport EyeTracker from "../components/EyeTracker.jsx";\nimport GazeRuntimeDebugger from "../components/GazeRuntimeDebugger.jsx";\nimport {\n  GAZE_THRESHOLDS,\n  distance,\n  findCardAtPoint,\n} from "../runtime/gazeRuntime.js";
+import { gsap } from "gsap";
+
+import EyeTracker from "../components/EyeTracker.jsx";
+import GazeRuntimeDebugger from "../components/GazeRuntimeDebugger.jsx";
+import {
+  GAZE_THRESHOLDS,
+  distance,
+  findCardAtPoint,
+} from "../runtime/gazeRuntime.js";
 import AIAssistant from "./AIAssistant.jsx";
 
 const categories = [
@@ -150,7 +158,8 @@ export default function Dashboard({ user, onLogout }) {
   const [activeView, setActiveView] =
     useState("store");
 
-  const [search, setSearch] = useState("");\n
+  const [search, setSearch] = useState("");
+
   const cardRefs = useRef(new Map());
   const runtimeRef = useRef({
     calibrated: false,
