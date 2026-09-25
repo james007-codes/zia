@@ -107,6 +107,22 @@ export default function EyeTracker({ visible = true }) {
           return;
         }
 
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (err) {
+          console.error("Camera permission failed:", err);
+          setError(
+            "Camera access was denied or unavailable: " +
+              (err?.message || "Please allow camera access.")
+          );
+          return;
+        }
+
         webgazer.setGazeListener((data) => {
           if (!data) return;
 
