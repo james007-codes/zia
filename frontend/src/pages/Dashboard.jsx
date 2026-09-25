@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   ShoppingBag,
@@ -12,7 +12,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-import EyeTracker from "../components/EyeTracker.jsx";
+import { gsap } from "gsap";\n\nimport EyeTracker from "../components/EyeTracker.jsx";\nimport GazeRuntimeDebugger from "../components/GazeRuntimeDebugger.jsx";\nimport {\n  GAZE_THRESHOLDS,\n  distance,\n  findCardAtPoint,\n} from "../runtime/gazeRuntime.js";
 import AIAssistant from "./AIAssistant.jsx";
 
 const categories = [
@@ -150,7 +150,288 @@ export default function Dashboard({ user, onLogout }) {
   const [activeView, setActiveView] =
     useState("store");
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState("");\n
+  const cardRefs = useRef(new Map());
+  const runtimeRef = useRef({
+    calibrated: false,
+    state: "IDLE",
+    previousSample: null,
+    samples: [],
+    focusedProductId: null,
+    cardDwellStart: null,
+    outsideStart: null,
+    highMovementStart: null,
+    switchTimestamps: [],
+    lastCardId: null,
+  });
+
+  const [gazeRuntime, setGazeRuntime] = useState({
+    calibrated: false,
+    state: "IDLE",
+    focusedProductId: null,
+    cardDwellMs: 0,
+    velocity: 0,
+    switchCount: 0,
+    outsideMs: 0,
+  });
+
+  useEffect(() => {
+    const handleCalibration = () => {
+      runtimeRef.current.calibrated = true;
+      setGazeRuntime((current) => ({
+        ...current,
+        calibrated: true,
+      }));
+    };
+
+    const handleGazeSample = (event) => {
+      const runtime = runtimeRef.current;
+      const sample = event.detail;
+
+      if (!runtime.calibrated || !sample) return;
+
+      const now = sample.timestamp || Date.now();
+      const previous = runtime.previousSample;
+
+      const velocity =
+        previous && now > previous.timestamp
+          ? (distance(sample, previous) /
+              (now - previous.timestamp)) *
+            1000
+          : 0;
+
+      runtime.previousSample = sample;
+
+      runtime.samples = [
+        ...runtime.samples.filter(
+          (item) =>
+            now - item.timestamp <=
+            GAZE_THRESHOLDS.sampleHistoryMs
+        ),
+        {
+          ...sample,
+          velocity,
+        },
+      ];
+
+      const focusedProductId = findCardAtPoint(
+        sample.x,
+        sample.y,
+        cardRefs.current
+      );
+
+      if (focusedProductId !== runtime.lastCardId) {
+        if (focusedProductId) {
+          runtime.cardDwellStart = now;
+        } else {
+          runtime.cardDwellStart = null;
+        }
+
+        if (runtime.lastCardId && focusedProductId) {
+          runtime.switchTimestamps.push(now);
+        }
+
+        runtime.lastCardId = focusedProductId;
+      }
+
+      runtime.switchTimestamps =
+        runtime.switchTimestamps.filter(
+          (timestamp) =>
+            now - timestamp <=
+            GAZE_THRESHOLDS.struggleWindowMs
+        );
+
+      if (focusedProductId) {
+        runtime.outsideStart = null;
+      } else if (runtime.outsideStart === null) {
+        runtime.outsideStart = now;
+      }
+
+      if (velocity >= GAZE_THRESHOLDS.highVelocityPxPerSecond) {
+        runtime.highMovementStart ??= now;
+      } else {
+        runtime.highMovementStart = null;
+      }
+
+      const cardDwellMs =
+        focusedProductId && runtime.cardDwellStart
+          ? now - runtime.cardDwellStart
+          : 0;
+
+      const outsideMs =
+        runtime.outsideStart !== null
+          ? now - runtime.outsideStart
+          : 0;
+
+      const highMovementMs =
+        runtime.highMovementStart !== null
+          ? now - runtime.highMovementStart
+          : 0;
+
+      const lastSampleAge = now - sample.timestamp;
+
+      let nextState = runtime.state;
+
+      if (
+        outsideMs >= GAZE_THRESHOLDS.abandonOutsideMs ||
+        lastSampleAge >= GAZE_THRESHOLDS.abandonNoSampleMs
+      ) {
+        nextState = "ABANDON";
+      } else if (
+        highMovementMs >=
+          GAZE_THRESHOLDS.struggleHighMovementMs ||
+        runtime.switchTimestamps.length >=
+          GAZE_THRESHOLDS.struggleSwitchCount
+      ) {
+        nextState = "STRUGGLE";
+      } else if (
+        focusedProductId &&
+        cardDwellMs >= GAZE_THRESHOLDS.focusDwellMs
+      ) {
+        nextState = "FOCUS";
+      }
+
+      runtime.focusedProductId = focusedProductId;
+      runtime.state = nextState;
+
+      setGazeRuntime({
+        calibrated: runtime.calibrated,
+        state: nextState,
+        focusedProductId,
+        cardDwellMs,
+        velocity,
+        switchCount: runtime.switchTimestamps.length,
+        outsideMs,
+      });
+    };
+
+    window.addEventListener(
+      "zia:gaze-calibrated",
+      handleCalibration
+    );
+    window.addEventListener(
+      "zia:gaze-sample",
+      handleGazeSample
+    );
+
+    return () => {
+      window.removeEventListener(
+        "zia:gaze-calibrated",
+        handleCalibration
+      );
+      window.removeEventListener(
+        "zia:gaze-sample",
+        handleGazeSample
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const focusedId = gazeRuntime.focusedProductId;
+    const card = focusedId
+      ? cardRefs.current.get(String(focusedId))
+      : null;
+
+    if (!card) return;
+
+    const image = card.querySelector("[data-card-image]");
+    const body = card.querySelector("[data-card-body]");
+    const quickAdd = card.querySelector("[data-quick-add]");
+
+    gsap.killTweensOf([card, image, body, quickAdd]);
+
+    const timeline = gsap.timeline();
+
+    if (gazeRuntime.state === "FOCUS") {
+      timeline
+        .to(card, {
+          y: -8,
+          scale: 1.025,
+          duration: 0.32,
+          ease: "power3.out",
+        })
+        .to(
+          image,
+          {
+            scale: 1.06,
+            duration: 0.45,
+            ease: "power2.out",
+          },
+          "<"
+        )
+        .to(
+          body,
+          {
+            y: -2,
+            duration: 0.25,
+            ease: "power2.out",
+          },
+          "<"
+        )
+        .to(
+          quickAdd,
+          {
+            y: 0,
+            opacity: 1,
+            duration: 0.25,
+            ease: "power2.out",
+          },
+          "<0.08"
+        );
+    } else if (gazeRuntime.state === "STRUGGLE") {
+      timeline
+        .to(card, {
+          y: -3,
+          scale: 1.01,
+          duration: 0.28,
+          ease: "power2.out",
+        })
+        .to(
+          card,
+          {
+            rotation: 0.5,
+            duration: 0.12,
+            ease: "sine.inOut",
+            repeat: 3,
+            yoyo: true,
+          },
+          "<"
+        );
+    } else if (gazeRuntime.state === "ABANDON") {
+      timeline
+        .to(card, {
+          y: 0,
+          scale: 0.985,
+          duration: 0.4,
+          ease: "power2.inOut",
+        })
+        .to(
+          image,
+          {
+            scale: 1,
+            duration: 0.35,
+            ease: "power2.inOut",
+          },
+          "<"
+        )
+        .to(
+          quickAdd,
+          {
+            y: 12,
+            opacity: 0,
+            duration: 0.2,
+            ease: "power2.in",
+          },
+          "<"
+        );
+    }
+
+    return () => timeline.kill();
+  }, [
+    gazeRuntime.state,
+    gazeRuntime.focusedProductId,
+  ]);
+
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
@@ -432,7 +713,7 @@ export default function Dashboard({ user, onLogout }) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
-            <EyeTracker />
+            <EyeTracker visible={activeView === "eye"} />
 
           </div>
 
@@ -772,6 +1053,19 @@ export default function Dashboard({ user, onLogout }) {
                     (product) => (
                       <article
                         key={product.id}
+                        ref={(element) => {
+                          if (element) {
+                            cardRefs.current.set(
+                              String(product.id),
+                              element
+                            );
+                          } else {
+                            cardRefs.current.delete(
+                              String(product.id)
+                            );
+                          }
+                        }}
+                        data-product-id={product.id}
                         className="group relative flex flex-col rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-xl"
                       >
 
@@ -794,13 +1088,13 @@ export default function Dashboard({ user, onLogout }) {
                             {product.badge}
                           </span>
 
-                          <button className="absolute bottom-3 left-3 right-3 translate-y-3 rounded-full bg-slate-950 py-2.5 text-xs font-semibold text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                          <button\n                            data-quick-add\n                            className="absolute bottom-3 left-3 right-3 translate-y-3 rounded-full bg-slate-950 py-2.5 text-xs font-semibold text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                             Quick Add
                           </button>
 
                         </div>
 
-                        <div className="flex flex-1 flex-col justify-between px-1">
+                        <div\n                          data-card-body\n                          className="flex flex-1 flex-col justify-between px-1">
 
                           <div>
 
