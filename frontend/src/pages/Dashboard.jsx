@@ -22,7 +22,7 @@ import {
   findCardAtPoint,
 } from "../runtime/gazeRuntime.js";
 import AIAssistant from "./AIAssistant.jsx";
-import { exportRuntimeJson, saveRuntimeSnapshot } from "../runtime/gazePersistence.js";
+import { exportRuntimeJson, loadRuntimeSnapshot, saveRuntimeSnapshot } from "../runtime/gazePersistence.js";
 
 const categories = [
   "All Products",
@@ -177,7 +177,7 @@ export default function Dashboard({ user, onLogout }) {
     lastCardId: null,
   });
 
-  const [gazeRuntime, setGazeRuntime] = useState({
+  useEffect(() => {\n    const saved = loadRuntimeSnapshot();\n    if (!saved) return;\n    runtimeRef.current = {\n      ...runtimeRef.current,\n      ...saved,\n      previousSample: null,\n      samples: saved.samples || [],\n      transitions: saved.transitions || [],\n      lastAnimatedProductId: null,\n    };\n  }, []);\n\n  const [gazeRuntime, setGazeRuntime] = useState({
     calibrated: false,
     state: "IDLE",
     focusedProductId: null,
