@@ -752,7 +752,7 @@ export default function Dashboard({ user, onLogout }) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
-            <EyeTracker visible={activeView === "eye"} />
+            <div className="sr-only"><span /></div>
 
           </div>
 
