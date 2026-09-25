@@ -22,6 +22,7 @@ import {
   findCardAtPoint,
 } from "../runtime/gazeRuntime.js";
 import AIAssistant from "./AIAssistant.jsx";
+import { exportRuntimeJson, saveRuntimeSnapshot } from "../runtime/gazePersistence.js";
 
 const categories = [
   "All Products",
@@ -166,6 +167,8 @@ export default function Dashboard({ user, onLogout }) {
     state: "IDLE",
     previousSample: null,
     samples: [],
+    transitions: [],
+    lastAnimatedProductId: null,
     focusedProductId: null,
     cardDwellStart: null,
     outsideStart: null,
