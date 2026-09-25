@@ -379,110 +379,51 @@ export default function Dashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
-    const focusedId = gazeRuntime.focusedProductId;
-    const card = focusedId
-      ? cardRefs.current.get(String(focusedId))
-      : null;
+    const ids = new Set(
+      [runtimeRef.current.lastAnimatedProductId, gazeRuntime.focusedProductId]
+        .filter(Boolean)
+        .map(String)
+    );
+    const timelines = [];
 
-    if (!card) return;
+    ids.forEach((id) => {
+      const card = cardRefs.current.get(id);
+      if (!card) return;
 
-    const image = card.querySelector("[data-card-image]");
-    const body = card.querySelector("[data-card-body]");
-    const quickAdd = card.querySelector("[data-quick-add]");
+      const image = card.querySelector("[data-card-image]");
+      const body = card.querySelector("[data-card-body]");
+      const quickAdd = card.querySelector("[data-quick-add]");
 
-    gsap.killTweensOf([card, image, body, quickAdd]);
+      gsap.killTweensOf([card, image, body, quickAdd]);
 
-    const timeline = gsap.timeline();
+      const focused = String(gazeRuntime.focusedProductId) === id;
+      const timeline = gsap.timeline();
 
-    if (gazeRuntime.state === "FOCUS") {
-      timeline
-        .to(card, {
-          y: -8,
-          scale: 1.025,
-          duration: 0.32,
-          ease: "power3.out",
-        })
-        .to(
-          image,
-          {
-            scale: 1.06,
-            duration: 0.45,
-            ease: "power2.out",
-          },
-          "<"
-        )
-        .to(
-          body,
-          {
-            y: -2,
-            duration: 0.25,
-            ease: "power2.out",
-          },
-          "<"
-        )
-        .to(
-          quickAdd,
-          {
-            y: 0,
-            opacity: 1,
-            duration: 0.25,
-            ease: "power2.out",
-          },
-          "<0.08"
-        );
-    } else if (gazeRuntime.state === "STRUGGLE") {
-      timeline
-        .to(card, {
-          y: -3,
-          scale: 1.01,
-          duration: 0.28,
-          ease: "power2.out",
-        })
-        .to(
-          card,
-          {
-            rotation: 0.5,
-            duration: 0.12,
-            ease: "sine.inOut",
-            repeat: 3,
-            yoyo: true,
-          },
-          "<"
-        );
-    } else if (gazeRuntime.state === "ABANDON") {
-      timeline
-        .to(card, {
-          y: 0,
-          scale: 0.985,
-          duration: 0.4,
-          ease: "power2.inOut",
-        })
-        .to(
-          image,
-          {
-            scale: 1,
-            duration: 0.35,
-            ease: "power2.inOut",
-          },
-          "<"
-        )
-        .to(
-          quickAdd,
-          {
-            y: 12,
-            opacity: 0,
-            duration: 0.2,
-            ease: "power2.in",
-          },
-          "<"
-        );
-    }
+      if (focused && gazeRuntime.state === "FOCUS") {
+        timeline
+          .to(card, { y: -10, scale: 1.035, duration: 0.35, ease: "power3.out" })
+          .to(image, { scale: 1.08, duration: 0.4, ease: "power2.out" }, "<")
+          .to(body, { y: -3, duration: 0.25, ease: "power2.out" }, "<0.05")
+          .to(quickAdd, { y: 0, opacity: 1, duration: 0.25, ease: "back.out(1.4)" }, "<0.08");
+      } else if (focused && gazeRuntime.state === "STRUGGLE") {
+        timeline
+          .to(card, { y: -3, scale: 1.01, duration: 0.25, ease: "power2.out" })
+          .to(card, { rotation: 0.6, duration: 0.1, ease: "sine.inOut", repeat: 3, yoyo: true }, "<");
+      } else {
+        timeline
+          .to(card, { y: 0, scale: 1, duration: 0.3, ease: "power2.inOut" })
+          .to(image, { scale: 1, duration: 0.3, ease: "power2.inOut" }, "<")
+          .to(body, { y: 0, duration: 0.25, ease: "power2.inOut" }, "<")
+          .to(quickAdd, { y: 12, opacity: 0, duration: 0.2, ease: "power2.in" }, "<");
+      }
 
-    return () => timeline.kill();
-  }, [
-    gazeRuntime.state,
-    gazeRuntime.focusedProductId,
-  ]);
+      timelines.push(timeline);
+    });
+
+    runtimeRef.current.lastAnimatedProductId = gazeRuntime.focusedProductId;
+
+    return () => timelines.forEach((timeline) => timeline.kill());
+  }, [gazeRuntime.state, gazeRuntime.focusedProductId]);
 
 
   const filteredProducts = products.filter((product) => {
