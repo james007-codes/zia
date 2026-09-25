@@ -98,7 +98,7 @@ export default function EyeTracker({ visible = true }) {
     loadScript(
       "https://cdn.jsdelivr.net/npm/webgazer@3.3.0/dist/webgazer.min.js"
     )
-      .then((webgazer) => {
+      .then(async (webgazer) => {
         // Check camera support
         if (!navigator.mediaDevices?.getUserMedia) {
           setError(
@@ -107,41 +107,43 @@ export default function EyeTracker({ visible = true }) {
           return;
         }
 
-        webgazer
-          .setGazeListener((data) => {
-            if (!data) return;
+        webgazer.setGazeListener((data) => {
+          if (!data) return;
 
-            const sample = {
-              x: Math.round(data.x),
-              y: Math.round(data.y),
-              timestamp: Date.now(),
-            };
+          const sample = {
+            x: Math.round(data.x),
+            y: Math.round(data.y),
+            timestamp: Date.now(),
+          };
 
-            setGazeCoords(sample);
+          setGazeCoords(sample);
 
-            window.dispatchEvent(
-              new CustomEvent("zia:gaze-sample", {
-                detail: sample,
-              })
-            );
-          })
-          .begin()
-          .then(() => {
-            setIsReady(true);
+          window.dispatchEvent(
+            new CustomEvent("zia:gaze-sample", {
+              detail: sample,
+            })
+          );
+        });
 
-            // Show camera preview and gaze prediction point
-            webgazer
-              .showVideoPreview(true)
-              .showPredictionPoints(true);
-          })
-          .catch((err) => {
-            setError(
-              "Could not start eye tracker: " +
-                err.message
-            );
-          });
+        try {
+          await webgazer.begin();
+
+          setIsReady(true);
+
+          // Show camera preview and gaze prediction point
+          webgazer
+            .showVideoPreview(true)
+            .showPredictionPoints(true);
+        } catch (err) {
+          console.error("WebGazer initialization failed:", err);
+          setError(
+            "Could not start eye tracker: " +
+              (err?.message || "WebGazer initialization failed.")
+          );
+        }
       })
       .catch((err) => {
+        console.error("WebGazer script load failed:", err);
         setError(err.message);
       });
 
