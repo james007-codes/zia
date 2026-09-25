@@ -245,6 +245,12 @@ export default function Dashboard({ user, onLogout }) {
 
       runtime.previousSample = sample;
 
+      const focusedProductId = findCardAtPoint(
+        sample.x,
+        sample.y,
+        cardRefs.current
+      );
+
       runtime.samples = [
         ...runtime.samples.filter(
           (item) =>
@@ -257,12 +263,6 @@ export default function Dashboard({ user, onLogout }) {
           productId: focusedProductId,
         },
       ];
-
-      const focusedProductId = findCardAtPoint(
-        sample.x,
-        sample.y,
-        cardRefs.current
-      );
 
       if (focusedProductId !== runtime.lastCardId) {
         if (focusedProductId) {
