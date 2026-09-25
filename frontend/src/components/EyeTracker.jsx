@@ -50,7 +50,7 @@ const CALIBRATION_POINTS = [
   { id: 9, style: { bottom: "10%", right: "10%" } },
 ];
 
-export default function EyeTracker() {
+export default function EyeTracker({ visible = true }) {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
 
